@@ -33,12 +33,21 @@ logger.setLevel(logging.DEBUG)
 def read_headers_to_list(file_path: str,
                          file_name: str,
                          sheet_name: str,
-                         column_name: str) -> list:
+                        #  column_name: str,
+                         column_nameIn: str,
+                         column_nameOut: str) -> dict:
     """Read header list from Excel and returns its values as a list.
     """
     try:
         df = pd.read_excel(join(file_path, file_name), sheet_name=sheet_name)
-        column_values = df[column_name].tolist()
+        # column_values = df[column_name].tolist()
+
+        # Извлечение колонок по именам
+        col1 = df[column_nameIn]
+        col2 = df[column_nameOut]
+
+        # Преобразование в словарь
+        column_values = dict(zip(col1, col2))
 
         return column_values
 
@@ -70,7 +79,7 @@ def check_files_with_extension(folder_path: str,
 
 def find_and_validate_columns(file_path: str,
                               sheet_name: str,
-                              expected_columns: list) -> Tuple[pd.DataFrame,
+                              expected_columns: dict) -> Tuple[pd.DataFrame,
                                                                int, None]:
     """Find the row with column names in the specified sheet
         and validate them.
@@ -109,19 +118,22 @@ def find_and_validate_columns(file_path: str,
     global material_req_value
     material_req_value = material_req_row.iloc[0, 3]
 
+    # Convert dict from config file to list for titles validation
+    expected_columns_lst = list(expected_columns.keys())
+
     # Iterate over the rows to find the expected column names
     for ind, row in df.iterrows():
         actual_columns = row.dropna().tolist()
 
         # Checking that all or part of the columns match original template
-        if set(expected_columns).issubset(actual_columns):
+        if set(expected_columns_lst).issubset(actual_columns):
             # if set(actual_columns).issubset(expected_columns):
             # Validate the columns
             # missing_columns
             # extra_columns = [col for col in expected_columns
             #                  if col not in actual_columns]
             extra_columns = [col for col in actual_columns
-                             if col not in expected_columns]
+                             if col not in expected_columns_lst]
             if not extra_columns:
                 logger.info(f"Column validation successful: "
                             f"All expected columns are present "
@@ -175,20 +187,20 @@ def find_and_validate_columns(file_path: str,
         #     pprint(f"Expected columns: {expected_columns}")
         #     return
 
-        if set(expected_columns).intersection(actual_columns):
+        if set(expected_columns_lst).intersection(actual_columns):
             # Validate the columns
             missed_columns = (list(
-                set(expected_columns).difference(actual_columns)))
+                set(expected_columns_lst).difference(actual_columns)))
             logger.error(f"Column validation failed: "
                          f"Could not find some expected columns. "
                          f"For Excel file: {file_path}. ")
             logger.error(f"Missed columns: {missed_columns}")
-            logger.info(f"Expected columns: {expected_columns}")
+            logger.info(f"Expected columns: {expected_columns_lst}")
             print(f"Column validation failed: "
                   f"Could not find some expected columns. "
                   f"For Excel file: {file_path}")
             pprint(f"Missed columns: {missed_columns}")
-            pprint(f"Expected columns: {expected_columns}")
+            pprint(f"Expected columns: {expected_columns_lst}")
             return
 
 
@@ -205,8 +217,14 @@ def parse_extract_to_excel(df: pd.DataFrame,
         df.drop(df.index[:2], inplace=True)
         df = df.loc[:, df.columns.notna()]
 
+        # Convert dict from config file to list for titles validation
+        expected_columns_lst = list(expected_columns.keys())
+
         # Prepeare df only with extracted columns
-        df = df[expected_columns]
+        df = df[expected_columns_lst]
+
+        # Column names rename from Title list in to Title list out
+        df.rename(columns=expected_columns, inplace=True)
 
         # Adding two columns with values from cover
         df.insert(0, material_req_name, material_req_value)
@@ -240,7 +258,9 @@ def main() -> None:
     file_log_path: str = join(logs_path, 'log.txt')
     config_file_name = 'config.xlsx'
     config_sheet_name = 'config_info'
-    config_column_name = 'Title list'
+    # config_column_name = 'Title list'
+    config_column_nameIn = 'Title list in'
+    config_column_nameOut = 'Title list out'
     sheet_name: str = 'Vendor Document Register'
     xlsx_file_exten: str = '*.xlsx'
     xls_file_exten: str = '*.xls'
@@ -250,7 +270,9 @@ def main() -> None:
     expected_columns = read_headers_to_list(config_path,
                                             config_file_name,
                                             config_sheet_name,
-                                            config_column_name)
+                                            # config_column_name,
+                                            config_column_nameIn,
+                                            config_column_nameOut)
     if not expected_columns:
         return
 
